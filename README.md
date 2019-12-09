@@ -37,6 +37,9 @@ Theme: Procedural adventure generator
 
 > You chase a dragon for its curing scales.
 
+Building blocks:
+ - Dragon and scales: Could be any mystical creature that can have notable body parts
+
 > You flee a dark forest, for you stole from the creatures that lurk there.
 
 > You ride the mountains, to cross a bridge to another land.
@@ -222,5 +225,56 @@ The same bits of information can be put into text in different ways:
        - cartographer
        - guard commander
 
+ - We need a way to link leaves. For example, we collapse a combination of
+   creature and body part, yielding {dragon, scales}. Next we want to find
+   a property for the body parts. We want to do something like
+   `body_part_and_property.collapse(scales)`, thus providing a sort of filter.
+
+   With this, we don't need to have a new node for the combination of creature,
+   body part, and property.
+
+ - Basic building blocks: We could try to write flexible building blocks that
+   can be used to build a story and expand details as needed.
+    - Something was stolen: "A local blacksmith seeks your help. His father's battle axe was stolen from his house. The blacksmith suspects a group of bandits who live in a nearby forest. He promises to reward you if you recover the battle axe."
+       - What was stolen? Item
+       - Who stole it? A party
+       - Hint on the location of the party: Where are they or where did they go?
+       - How did you hear of the stealing?
+
+   With these building blocks we can flexibly define relations between data points.
+
+    - A priest belongs to a religious group.
+    - A person can have a family status.
+    - An object can be stored in a specific type of building:
+       - Book - Library
+       - any personal item - House
+       - weapon - armory
+       - treasure - vault
+
+   These relations let us choose a starting point for the quest, and expand it
+   confidently.
+
+ - We could categorize quests into scales:
+    - small-scale quests are about local folk and problems. Travel distance is
+      short, and the reward is small. Information about small-scale quests
+      comes from first-hand conversations, or rumors.
+    - medium-scale quests are about regional problems. Travel can take days,
+      and there's a promising reward at stake. Information about medium-scale
+      quests comes from bard's songs or local legends.
+    - large-scale quests are about problems that concern a country or
+      continent. Travel can take weeks, and the reward can be immense.
+      Information about large-scale quests comes from books, legends, scrolls.
+      large-scale quests might involve royals or legendary creatures.
 
 ## 
+
+Body parts may have properties.
+
+Healing a sickness
+
+Lifting a curse:
+ - By touching a magical object
+ - A person can do it. A witch, a witcher, a wizard, a mage
+
+Curing a poisoning
+
