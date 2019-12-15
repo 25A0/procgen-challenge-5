@@ -9,25 +9,6 @@ math.random()
 Next: Helper functions
 ]]
 
-local function indefinite_article(word)
-  local vocals = {
-    a = true,
-    e = true,
-    i = true,
-    o = true,
-    u = true,
-  }
-
-  -- guess the indefinite article by looking at the first
-  -- letter of the first word
-  local first_letter = string.sub(word, 1, 1)
-  if vocals[first_letter] then
-    return "an"
-  else
-    return "a"
-  end
-end
-
 -- this function takes a table (or a value), and flattens it,
 local function flatten(t)
   local function flatten_recursively(tab, res, next_index)
@@ -165,7 +146,7 @@ end
 -- format_node("I am %s", leaf "hungry" + leaf "thirsty").collapse()
 -- yields "I am hungry" or "I am thirsty".
 --
--- format_node("He wore a %s %s", (leaf "red" + leaf "brown") * (leaf "jacket" + leaf "scarf")).collapse()
+-- format_node("He wore a %s %s", (leaf "red" + leaf "brown"), (leaf "jacket" + leaf "scarf")).collapse()
 -- yields one of:
 -- "He wore a red jacket"
 -- "He wore a brown jacket"
@@ -173,27 +154,35 @@ end
 -- "He wore a brown scarf"
 --
 -- Any patterns of the form ":key:" will be populated with the corresponding
--- value in the stack's store. For example:
+-- value in the context's store. For example:
 --
 -- (
 --   store(leaf "blue" + leaf "black", "color") ..
 --   format_node("My favourite color is :color:")
--- ).collapse(new_stack())
+-- ).collapse(new_context())
 --
 -- yields "My favourite color is blue" or "My favourite color is black"
-local function format_node(fstring, node)
+local function format_node(fstring, ...)
   -- convert the fstring into a node if necessary
   local fstring_node = is_node(fstring) and fstring or leaf(fstring)
+  local n_options = fstring_node.n_options
+  local nodes = {...}
+  for _, n in ipairs(nodes) do
+    n_options = n_options * n.n_options
+  end
   return new_node {
-    n_options = (node and node.n_options or 1) * fstring_node.n_options,
-    collapse = function(stack)
-      local v = node and flatten({node.collapse(stack)}) or {}
+    n_options = n_options,
+    collapse = function(context)
+      local v = {}
+      for i, n in ipairs(nodes) do
+        v[i] = n.collapse(context)
+      end
       -- first populate the formatstring with the passed variables
-      local s = string.format(fstring_node.collapse(stack), unpack(v))
+      local s = string.format(fstring_node.collapse(context), unpack(v))
       -- then replace any :key: instances with values from the store
-      s = string.gsub(s, ":([_%a][_%a%d]*):", function(key)
-                    assert(stack and stack.store)
-                    return stack.store[key] or ""
+      s = string.gsub(s, ":([_%a][_%a%d ]*):", function(key)
+                    assert(context and context.store)
+                    return context.store[key] or ""
       end)
       return s
     end,
@@ -210,14 +199,14 @@ local function filter_node(fun, node, ...)
   }
 end
 
---[[ THE STACK
+--[[ THE CONTEXT
 
-When collapsing nodes, there's a stack shared by all nodes that are
+When collapsing nodes, there's a context shared by all nodes that are
 being collapsed.
-The stack is a sequence of literals.
+The context is a sequence of literals.
 
-When pushing elements to the stack, they are appended to the stack. When
-popping elements from the stack, they are removed from the end of the stack, by
+When pushing elements to the context, they are appended to the context. When
+popping elements from the context, they are removed from the end of the context, by
 default.
 
 There are also functions to peek elements without removing them, to clone
@@ -225,7 +214,7 @@ elements, and to drop elements without returning them.
 
 ]]
 
-local function new_stack()
+local function new_context()
   return {
     store = {}
   }
@@ -234,10 +223,10 @@ end
 local function push_store()
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      stack.store = {
-        __parent_store = stack.store,
+    collapse = function(context)
+      assert(context)
+      context.store = {
+        __parent_store = context.store,
       }
       return ""
     end,
@@ -247,82 +236,104 @@ end
 local function pop_store()
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      stack.store = assert(stack.store.__parent_store, "more pops than pushs")
+    collapse = function(context)
+      assert(context)
+      context.store = assert(context.store.__parent_store, "more pops than pushs")
       return ""
     end,
   }
 end
 
+-- the raw stack operations
+local stack_ops = {
+  push = function(context, i, v)
+    return table.insert(context, i or (#context + 1), v)
+  end,
+  pop = function(context, i)
+    return table.remove(context, i or #context)
+  end,
+  peek = function(context, i)
+    return context[i or #context]
+  end,
+  drop = function(context, i)
+    return table.remove(context, i or #context)
+  end,
+  clone = function(context, i)
+    return table.insert(context, assert(context[i or #context]))
+  end,
+  swap = function(context, i, j)
+    i, j = i or #context, j or #context - 1
+    context[i], context[j] = context[j], context[i]
+  end,
+}
+
 -- collapses the given node, and then pushes the resulting item
--- onto the stack, and then returns the empty string
+-- onto the context, and then returns the empty string
 local push = function(node, i)
   return new_node {
     n_options = node.n_options,
-    collapse = function(stack)
-      assert(stack)
-      table.insert(stack, i or (#stack + 1), node.collapse(stack))
+    collapse = function(context)
+      assert(context)
+      stack_ops.push(context, i, node.collapse(context))
       return ""
     end,
   }
 end
 
--- pops the ith, or the top item off the stack
+-- pops the ith, or the top item off the context
 local pop = function(i)
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      return assert(table.remove(stack, i or #stack))
+    collapse = function(context)
+      assert(context)
+      return assert(stack_ops.pop(context, i))
     end,
   }
 end
 
--- returns the ith, or the top item of the stack, but doesn't remove it
+-- returns the ith, or the top item of the context, but doesn't remove it
 local peek = function(i)
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      return assert(stack[i or #stack])
+    collapse = function(context)
+      assert(context)
+      return assert(stack_ops.peek(context, i))
     end,
   }
 end
 
--- removes the ith, or the top item off the stack and returns the empty string
+-- removes the ith, or the top item off the context and returns the empty string
 local drop = function(i)
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      assert(table.remove(stack, i or #stack))
+    collapse = function(context)
+      assert(context)
+      assert(stack_ops.drop(context, i))
       return ""
     end,
   }
 end
 
--- clones the ith, or the top item of the stack and returns the empty string
+-- clones the ith, or the top item of the context and returns the empty string
 local clone = function(i)
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      table.insert(stack, assert(stack[i or #stack]))
+    collapse = function(context)
+      assert(context)
+      stack_ops.clone(context, i)
       return ""
     end,
   }
 end
 
--- swaps the ith and jth, or the top two items of the stack and returns the
+-- swaps the ith and jth, or the top two items of the context and returns the
 -- empty string
 local swap = function(i, j)
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack)
-      i, j = i or #stack, j or #stack - 1
-      stack[i], stack[j] = stack[j], stack[i]
+    collapse = function(context)
+      assert(context)
+      stack_ops.swap(context, i, j)
       return ""
     end,
   }
@@ -331,28 +342,39 @@ end
 -- store(node, key): collapse the given node, and store the result in the store
 -- under the given key.
 --
--- store(key): pop the topmost item off the stack, and store the result in the
+-- store(key): pop the topmost item off the context, and store the result in the
 -- store under the given key.
+--
+-- If key is a table of strings, then store will assume that the given node, or
+-- the element at the top of the stack, will contain a table of strings, and will
+-- map them one by one to the corresponding key.
 local store = function(node, key)
   if not key then
     key = node
     node = nil
   end
   assert(key)
-  assert(type(key) == "string")
   return new_node {
     n_options = node and node.n_options or 1,
-    collapse = function(stack)
-      assert(stack and stack.store)
+    collapse = function(context)
+      assert(context and context.store)
       local to_store
       if node then
-        -- collapse that node, and store the result on the stack
-        to_store = node.collapse(stack)
+        -- collapse that node, and store the result on the context
+        to_store = node.collapse(context)
       else
-        -- pop the top-most value off the stack
-        to_store = table.remove(stack)
+        -- pop the top-most value off the context
+        to_store = stack_ops.pop(context)
       end
-      stack.store[key] = to_store
+      if type(key) == "string" then
+        context.store[key] = to_store
+      elseif type(key) == "table" then
+        for i, k in ipairs(key) do
+          context.store[k] = to_store[i]
+        end
+      else
+        error("Cannot handle key of type " .. type(key))
+      end
       return ""
     end,
   }
@@ -363,20 +385,20 @@ local read = function(key)
   assert(type(key) == "string")
   return new_node {
     n_options = 1,
-    collapse = function(stack)
-      assert(stack and stack.store)
-      return stack.store[key]
+    collapse = function(context)
+      assert(context and context.store)
+      return context.store[key]
     end,
   }
 end
 
--- returns a node that is keyed with 1 or n elements of the stack.
+-- returns a node that is keyed with 1 or n elements of the context.
 -- when collapsed, this node pops the first n elements off the
--- stack, and returns something depending on those elements.
+-- context, and returns something depending on those elements.
 --
--- The given table tab will be indexed with the first element of the stack.
+-- The given table tab will be indexed with the first element of the context.
 -- if n is larger than one, then it is assumed that tab contains nested
--- tables, which are indexed with further elements of the stack.
+-- tables, which are indexed with further elements of the context.
 --
 -- It is not obvious what the number of options should be for those
 -- nodes. For the moment, they are set to 1, but that's not accurate.
@@ -384,13 +406,88 @@ local function keyed_node(tab, n)
   n = n or 1
   return new_node {
     n_options = 1,
-    collapse = function(stack)
+    collapse = function(context)
       while n > 1 do
-        tab = tab[table.remove(stack)]
+        tab = tab[stack_ops.pop(context)]
         n = n - 1
       end
-      return tab[table.remove(stack)].collapse(stack)
+      return tab[stack_ops.pop(context)].collapse(context)
     end,
+  }
+end
+
+-- Tables can contain a special key "__default". Its value must be a string,
+-- not a node. If a table doesn't have a key for a certain value, then that
+-- table collapses to that default value, and to the empty string, otherwise.
+local function map_to_node(node, ...)
+  local tables = {...}
+  if #tables == 0 then
+    return new_node {
+      n_options = node.n_options,
+      collapse = function(...)
+        return {node.collapse(...)}
+      end,
+    }
+  end
+
+  assert(is_node(node))
+
+  -- Compute the number of options
+  local default_key = "__default"
+  local n_options = 0
+  local options_per_key = {}
+  for _, t in ipairs(tables) do
+    for k, v in pairs(t) do
+      if k == default_key then
+        assert(type(v) == "string", "The default entry must be a string")
+      else
+        assert(is_node(v), "Values in the tables must be nodes. Use map_to_string otherwise.")
+        options_per_key[k] = (options_per_key[k] or 1) * v.n_options
+      end
+    end
+  end
+  -- Finally, sum the options of all found keys.
+  for _, v in pairs(options_per_key) do
+    n_options = n_options + v
+  end
+
+  return new_node {
+    n_options = n_options,
+    collapse = function(...)
+      local key = node.collapse(...)
+      local result = {key}
+      for _, t in ipairs(tables) do
+        local n = t[key]
+        local v
+        if n then
+          v = n.collapse(...)
+        else
+          v = t[default_key] or ""
+        end
+        table.insert(result, v)
+      end
+      return result
+    end,
+  }
+end
+
+local function map_to_string(node, t)
+  -- The function can also be called as map_string(t),
+  -- in which case we'll pop a value off the stack instead
+  if not t then
+    node, t = nil, node
+  end
+
+  local default_key = "__default"
+  return new_node {
+    n_options = node and node.n_options or 1,
+    collapse = function(context, ...)
+      -- collapse the node, or pop a value off the stack
+      local key = node and node.collapse(context, ...) or stack_ops.pop(context)
+      local v = t[key]
+      if v then assert(type(v) == "string") end
+      return v or t[__default_key] or ""
+    end
   }
 end
 
@@ -412,14 +509,14 @@ local function prefix_a_an(node)
         -- letter of the first word
         local first_letter = string.sub(key, 1, 1)
         if vocals[first_letter] then
-          return leaf "an"
+          return "an"
         else
-          return leaf "a"
+          return "a"
         end
       end
   })
 
-  return push(node) .. clone() .. keyed_node(tab) .. " " .. pop()
+  return push(node) .. clone() .. map_to_string(tab) .. " " .. pop()
 end
 
 --[[
@@ -429,10 +526,13 @@ Next: the content of the generator. Items, locations, people, etc.
 local personal_item =
   leaf "sword" +
   leaf "amulet" +
+  leaf "ring" +
   leaf "helmet" +
   leaf "bracelet" +
   leaf "shield" +
   leaf "battle axe" +
+  leaf "dagger" +
+  leaf "claymore" +
   null_leaf
 
 local you = leaf "you"
@@ -464,51 +564,67 @@ local child = leaf "child"
 local husband = leaf "husband"
 local wife = leaf "wife"
 local partner = leaf "partner"
+local girlfriend = leaf "girlfriend"
+local boyfriend = leaf "boyfriend"
 
-local relations = father + mother + son + daughter + child + husband + wife + partner
+local relations = father + mother + son + daughter + child + husband + wife + partner + girlfriend + boyfriend
 
 --------
 
 local pronoun_of_gender = {
-  male = leaf "he",
-  female = leaf "she",
-  neutral = leaf "they",
-  other = leaf "they",
+  male = "he",
+  female = "she",
+  neutral = "they",
+  other = "they",
+}
+
+local object_pronoun_of_gender = {
+  male = "him",
+  female = "her",
+  neutral = "them",
+  other = "them",
 }
 
 local possessive_pronoun_of_gender = {
-  male = leaf "his",
-  female = leaf "her",
-  neutral = leaf "their",
-  other = leaf "their",
+  male = "his",
+  female = "her",
+  neutral = "their",
+  other = "their",
 }
 
 local gender_of_relation = {
-  father = gender.male,
-  mother = gender.female,
-  son = gender.male,
-  daughter = gender.female,
-  child = gender.neutral,
-  brother = gender.male,
-  sister = gender.female,
-  sibling = gender.neutral,
-  husband = gender.male,
-  wife = gender.female,
-  partner = gender.neutral,
+  father = "male",
+  mother = "female",
+  son = "male",
+  daughter = "female",
+  child = "neutral",
+  brother = "male",
+  sister = "female",
+  sibling = "neutral",
+  husband = "male",
+  wife = "female",
+  partner = "neutral",
+  girlfriend = "female",
+  boyfriend = "male",
 }
 
-local professions =
+local town_professions =
   leaf "blacksmith" +
   leaf "fisher" +
   leaf "logger" +
-  leaf "armorer" +
-  leaf "doctor" +
   leaf "hunter" +
   leaf "farmer" +
-  leaf "tanner" +
   leaf "stonemason" +
   leaf "carpenter" +
   leaf "priest" +
+  leaf "innkeeper" +
+  null_leaf
+
+local professions =
+  town_professions +
+  leaf "armorer" +
+  leaf "doctor" +
+  leaf "tanner" +
   leaf "astronomer" +
   leaf "cartographer" +
   leaf "librarian" +
@@ -622,6 +738,7 @@ local location =
   leaf "graveyard" +
   leaf "desert" +
   leaf "battlefield" +
+  leaf "tomb" +
   null_leaf
 
 local dangerous_property =
@@ -641,7 +758,6 @@ Next: The functions that define the adventures.
 --[[
 you stroll over the market, when
 you are gambling in a tavern, when
-you enjoy your evening mead in a tavern, when
 you make your way through a busy street, when
 you pass a group of strangers on a (forest/mountain) road, when
 ]]
@@ -656,10 +772,8 @@ local tavern_activities =
   leaf "gambling" +
   leaf "playing cards" +
   leaf "listening to a bard" +
-  format_node("talking to some %s", friendly_races) +
-  format_node(
-    leaf "enjoying your evening %s" + leaf "drinking %s",
-    drinks) +
+  -- format_node("talking to some %s", friendly_races) +
+  -- format_node("drinking %s", drinks) +
   null_leaf
 
 -- these can be used to describe locations like roads, towns, villages
@@ -667,21 +781,25 @@ local landscape_description =
   leaf "forest" + leaf "mountain" + leaf "coastal" + leaf "rural" +
   leaf "lakeside" + leaf "riverside"
 
-local quest_introduction = format_node(
+local quest_introduction_rural_social = format_node(
+  leaf "you are %s, when" + leaf "while you are %s," + leaf "while %s,",
+  format_node("passing a group of %s on a %s road",
+              (friendly_races + leaf "strangers"), landscape_description) +
+    null_leaf)
+
+local quest_introduction_urban_social = format_node(
   leaf "you are %s, when" + leaf "while you are %s," + leaf "while %s,",
   null_leaf +
     leaf "strolling over the market" +
     leaf "making your way through a busy street" +
     format_node("%s in a tavern", tavern_activities) +
-    format_node("passing a group of %s on a %s road",
-                (friendly_races + leaf "strangers") * landscape_description) +
     null_leaf)
 
 local lost_item_quest =
   -- a blacksmith approaches you. her father lost his sword in a haunted
   -- graveyard. she asks you to retrieve his sword.
 
-  quest_introduction .. " " ..
+  quest_introduction_urban_social .. " " ..
 
   -- "a blacksmith approaches you. "
   prefix_a_an(professions) .. " approaches you. " ..
@@ -692,15 +810,15 @@ local lost_item_quest =
   push(relations) .. clone() ..
   store("father") ..
   -- find the possessive pronoun for that relation
-  push(keyed_node(gender_of_relation)) ..
-  store(keyed_node(possessive_pronoun_of_gender), "his") ..
+  push(map_to_string(gender_of_relation)) ..
+  store(map_to_string(possessive_pronoun_of_gender), "his") ..
 
   -- pick a random gender
   push(gender.male + gender.female) .. clone() ..
   -- push the pronoun for this gender
-  store(keyed_node(pronoun_of_gender), "she") ..
+  store(map_to_string(pronoun_of_gender), "she") ..
   -- push the possessive pronoun for this gender
-  store(keyed_node(possessive_pronoun_of_gender), "her") ..
+  store(map_to_string(possessive_pronoun_of_gender), "her") ..
 
   -- pick a random personal item
   store(personal_item, "sword") ..
@@ -711,13 +829,134 @@ local lost_item_quest =
   format_node(":her: :father: lost :his: :sword: in a :haunted: :graveyard:. :she: asks you to travel to the :graveyard: and retrieve :his: :sword:.") ..
   pop_store()
 
-local small_scale_quest = null_leaf
+local nesw = leaf "north" + leaf "east" + leaf "south" + leaf "west"
+
+local vague_journey_destination =
+  nesw + leaf "coast" + leaf "mountains" + leaf "capital"
+
+local quantity_description =
+  leaf "a lot of" + leaf "quite a few" + leaf "some" + leaf "a few" +
+  leaf "a handful of" + leaf "plenty of"
+
+local plundering_bandits_quest =
+  -- While traveling to the coast, you spend the night in a little town. The
+  -- townsfolk is hospitable, but something about this place feels odd. you
+  -- notice a lot of broken windows, and one of the houses has burnt down.
+  -- When you ask the local innkeeper about it, she tells you of plundering
+  -- bandits that terrify the region. Will you hunt down the bandits, or carry
+  -- on with your journey?
+
+  format_node("while travelling to the %s, ", vague_journey_destination) ..
+  "you spend the night in a little town. " ..
+  "the people seem friendly, but something about this place feels odd. " ..
+  "one of the " ..
+  (leaf "houses" + leaf "stables" + leaf "windmills" + leaf "watermills") ..
+  " has burnt down, and " ..
+  format_node("you notice %s %s. ", quantity_description, (
+                leaf "broken windows" + leaf "burnt cornfields"
+  )) ..
+  store(unfriendly_races + leaf "bandits", "bandits") ..
+  "when you ask a local " .. town_professions .. " about it, " ..
+  format_node("they tell you about plundering :bandits: that terrify the region. " ..
+  "will you hunt down the :bandits:, or carry on with your journey?") ..
+  empty_leaf
+
+local hidden_treasure_quest =
+  --[[
+
+    After a day of traveling, you set up camp in a lush forest and start to collect firewood.
+    Between the roots of a tree, you discover a small metal box, containing a letter.
+
+    The text tells of a stash of gold, hidden in the mountains, and guarded by a mighty dragon.
+
+  ]]
+
+  (
+    leaf "after a day of travelling, you set up camp in a lush forest. you just start to collect firewood, when you spot something odd. " +
+    leaf "it is a cold, clear winter day, and you are hunting in a dense forest. you are preying on some deer, when you spot something odd. " +
+      null_leaf
+  ) ..
+
+  store(leaf "between the roots of a tree" +
+          leaf "hidden under some bushes" +
+          leaf "hidden under a fallen tree" +
+          leaf "hidden in a small cavity in a cliffside" +
+          null_leaf,
+        "between the roots of a tree") ..
+  store(leaf "a small, metal box" +
+          leaf "a small wooden box" +
+          leaf "a small leather backpack" +
+          leaf "a small metal tube" +
+          null_leaf,
+        "a small metal box") ..
+  store(leaf "a letter" + leaf "a piece of parchment", "a letter") ..
+  format_node(":between the roots of a tree:, you discover :a small metal box:, containing :a letter:. ") ..
+
+  push(
+    (leaf "a stash of" + leaf "a pile of") * (leaf "gold" + leaf "gemstones") +
+    ("a " .. (leaf "valuable" + leaf "powerful") .. ", " .. (leaf "magical" + leaf "enchanted")) * personal_item
+  ) ..
+  store({"a stash of", "gold"}) ..
+  store(leaf "in the mountains" +
+          leaf "in a deep, abandoned mineshaft" +
+          leaf "in the dungeons of an old castle ruin" +
+          leaf "in the catacombs under the capital's large cathedral",
+        "in the mountains") ..
+  store(leaf "a mighty " + leaf "a gigantic " .. creatures, "a mighty dragon") ..
+  format_node(leaf "the text tells of :a stash of: :gold:, hidden :in the mountains:, and guarded by :a mighty dragon:." +
+                leaf "the text tells of :a stash of: :gold:, hidden :in the mountains:. :a mighty dragon: is said to guard the :gold:.")
+
+local lifting_the_curse_quest =
+  --[[
+    the beloved king is cursed, and their health is fading by the day.
+    the queen offers a generous reward for anyone able to lift the curse.
+
+    you have been reading countless books, looking for ways to lift the curse.
+    finally, on the third day, one of the books mentions a possible treatment.
+    there is a nearly forgotten ritual that might be able to lift the curse,
+    but it requires the scales of a dragon to be completed.
+  ]]
+  push(null_leaf +
+         leaf "king" * leaf "queen" +
+         leaf "queen" * leaf "king" +
+         leaf "prince" * (leaf "king" + leaf "queen") +
+         leaf "princess" * (leaf "king" + leaf "queen") +
+         null_leaf) ..
+  store({"king", "queen"}) ..
+  push(leaf "is cursed" * leaf "lift the curse" +
+         leaf "was poisoned" * leaf "stop the poison" +
+         leaf "has fallen ill" * leaf "cure the illness") ..
+  store({"is cursed", "lift the curse"}) ..
+  format_node("the beloved :king: :is cursed:, and their health is fading by the day. the :queen: offers a generous reward for anyone able to :lift the curse:. ") ..
+  push(
+    leaf "reading countless books, looking" * leaf "books"+
+      (
+        (store(leaf "monks" + leaf "witches", "monks") ..
+          format_node("discussing the symptoms with :monks: and herbalists, asking")) * read("monks")
+  )) ..
+  store({"reading countless books looking", "books"}) ..
+  format_node("you have spent days :reading countless books looking: for ways to :lift the curse:. ") ..
+  format_node("finally, on the third day, one of the :books: mentions a possible treatment. ") ..
+
+    push(
+      leaf "ritual" * (leaf "completing it" + leaf "performing it") +
+        leaf "potion" * (leaf "brewing it" + leaf "preparing it")
+    )..
+    store({"ritual", "completing it"}) ..
+
+    push(map_to_node(creatures, body_parts_of_creature)) ..
+    store({"dragon", "scales"}) ..
+
+  format_node("there is a nearly forgotten :ritual: that might be able to :lift the curse:, but :completing it: requires the :scales: of a :dragon:.")
+
+local small_scale_quest = hidden_treasure_quest + lost_item_quest + plundering_bandits_quest + lifting_the_curse_quest
 local medium_scale_quest = null_leaf
 local large_scale_quest = null_leaf
 
-local quest = null_leaf
+local quest = small_scale_quest + medium_scale_quest + large_scale_quest
 
+print("Number of quests:", quest.n_options)
 for i=1,10 do
-  --print(quest_introduction.collapse(new_stack()))
-  print(lost_item_quest.collapse(new_stack()))
+  print(quest.collapse(new_context()))
+  print()
 end

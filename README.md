@@ -3,7 +3,29 @@
 In this post, I will briefly go over my entry for Procedural Challenge 5.
 First of all, here are a couple of adventures generated with my entry:
 
-> TODO
+> it is a cold, clear winter day, and you are hunting in a dense forest. you are preying on some deer, when you spot something odd. hidden under a fallen tree, you discover a small metal tube, containing a piece of parchment. the text tells of a valuable, enchanted claymore, hidden in the mountains. a mighty griffin is said to guard the claymore.
+
+> while you are making your way through a busy street, a monk approaches you. her boyfriend lost his claymore in a haunted desert. she asks you to travel to the desert and retrieve his claymore.
+
+> the beloved prince is cursed, and their health is fading by the day. the queen offers a generous reward for anyone able to lift the curse. you have spent days reading countless books, looking for ways to lift the curse. finally, on the third day, one of the books mentions a possible treatment. there is a nearly forgotten ritual that might be able to lift the curse, but performing it requires the blood of a centaur.
+
+> after a day of travelling, you set up camp in a lush forest. you just start to collect firewood, when you spot something odd. hidden in a small cavity in a cliffside, you discover a small metal tube, containing a piece of parchment. the text tells of a pile of gemstones, hidden in a deep, abandoned mineshaft. a gigantic griffin is said to guard the gemstones.
+
+> while travelling to the capital, you spend the night in a little town. the people seem friendly, but something about this place feels odd. one of the watermills has burnt down, and you notice quite a few burnt cornfields. when you ask a local logger about it, they tell you about plundering dark elves that terrify the region. will you hunt down the dark elves, or carry on with your journey?
+
+> you are listening to a bard in a tavern, when a farmer approaches you. his father lost his bracelet in a haunted tomb. he asks you to travel to the tomb and retrieve his bracelet.
+
+> you are playing cards in a tavern, when a monk approaches you. his husband lost his amulet in a cursed tomb. he asks you to travel to the tomb and retrieve his amulet.
+
+> after a day of travelling, you set up camp in a lush forest. you just start to collect firewood, when you spot something odd. hidden under some bushes, you discover a small leather backpack, containing a letter. the text tells of a powerful, magical bracelet, hidden in the catacombs under the capital's large cathedral. a mighty centaur is said to guard the bracelet.
+
+> while making your way through a busy street, a cartographer approaches you. her wife lost her bracelet in a cursed graveyard. she asks you to travel to the graveyard and retrieve her bracelet.
+
+Currently, the generator knows only four different quest types. With more time,
+I would have liked to seriously expand the number of quest types. Personally, I
+don't think the generated adventures are currently very interesting. It feels
+more like a finished engine that lacks actual content. Still, I enjoyed finding
+good solutions to tackle the problems I ran into.
 
 The rest of the post will explain how it works internally. You can find a link
 to the code at the end of the post.
@@ -350,3 +372,5 @@ the problems I ran into. Thanks for reading! :)
 Link to the code:
 
 [https://github.com/25A0/procgen-challenge-5](https://github.com/25A0/procgen-challenge-5)
+
+Tested with lua 5.1 and luajit.

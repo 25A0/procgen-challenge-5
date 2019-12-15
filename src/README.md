@@ -20,6 +20,8 @@ Theme: Procedural adventure generator
 
 ## Adventure examples
 
+This is the kind of stuff I'd like to generate:
+
 > You and a group of dwarfs travel to the mountains to ambush the King's tax collector.
 
 > You explore the cursed desert to find your father's lost sword.
@@ -33,12 +35,9 @@ Theme: Procedural adventure generator
 
 > You and a group of elves are traveling southwards when you hear that the
 > church's hidden treasure was found in a cave near the capital. Will you
-> guide it from greedy bandits, or try to take your own share?
+> guard it against greedy bandits, or try to take your own share?
 
 > You chase a dragon for its curing scales.
-
-Building blocks:
- - Dragon and scales: Could be any mystical creature that can have notable body parts
 
 > You flee a dark forest, for you stole from the creatures that lurk there.
 
