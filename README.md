@@ -1,6 +1,6 @@
 # ProcGen Challenge 5
 
-In this post, I will briefly go over my entry for Procedural Challenge 5.
+In this post, I will briefly go over my entry for [Procedural Challenge 5](https://www.reddit.com/r/proceduralgeneration/comments/dujjwz/procedural_challenge_5_procedural_adventure/).
 First of all, here are a couple of adventures generated with my entry:
 
 > it is a cold, clear winter day, and you are hunting in a dense forest. you are preying on some deer, when you spot something odd. hidden under a fallen tree, you discover a small metal tube, containing a piece of parchment. the text tells of a valuable, enchanted claymore, hidden in the mountains. a mighty griffin is said to guard the claymore.
