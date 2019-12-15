@@ -1,5 +1,4 @@
-local inspect = require("src.inspect")
-
+-- seed the PRNG, and query it a couple of time, since it's not very good while warming up in plain Lua5.1
 math.randomseed(os.time())
 math.random()
 math.random()
