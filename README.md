@@ -8,7 +8,7 @@ First of all, here are a couple of adventures generated with my entry:
 The rest of the post will explain how it works internally. You can find a link
 to the code at the end of the post.
 
-The appraoch I took for this challenge was to write some patterns for
+The approach I took for this challenge was to write some patterns for
 adventures by hand, and then write some code to diversify those patterns.
 
 A simple adventure could look like this:
@@ -345,8 +345,8 @@ nodes to form more complex stories.
 
 That is all I want to cover in this post. Honestly, I don't think the generated
 adventures are that interesting, but I enjoyed finding good solutions to tackle
-the problems I ran into.
+the problems I ran into. Thanks for reading! :)
 
-Link to code:
+Link to the code:
 
-TODO
+[https://github.com/25A0/procgen-challenge-5](https://github.com/25A0/procgen-challenge-5)
